@@ -1,0 +1,13 @@
+# 可執行檔
+*.exe
+*.out
+*.test
+
+# Mac OS
+.DS_Store
+
+# VSCode 設定
+.vscode/
+
+# Go module
+vendor/

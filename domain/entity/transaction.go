@@ -3,9 +3,13 @@ package entity
 import (
 	"context"
 	"ethereum-scanner/eth"
+	"fmt"
 	"log"
 	"math/big"
+	"strings"
+	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"gorm.io/gorm"
 )
@@ -28,8 +32,9 @@ type Transaction struct {
 
 // ConvertToEntityTransaction 將以太坊交易轉換為實體
 func ConvertToEntityTransaction(tx *types.Transaction, blockNumber uint64) *Transaction {
+
 	// 獲取交易收據以確認狀態(status)
-	receipt, err := eth.Client.TransactionReceipt(context.Background(), tx.Hash())
+	receipt, err := GetEthReceipt(tx.Hash())
 	if err != nil {
 		log.Printf("獲取交易收據錯誤: %v", err)
 		return nil
@@ -62,4 +67,33 @@ func ConvertToEntityTransaction(tx *types.Transaction, blockNumber uint64) *Tran
 		Data:        tx.Data(),
 		Status:      receipt.Status == 1,
 	}
+}
+
+func GetEthReceipt(txHash common.Hash) (*types.Receipt, error) {
+
+	ctx := context.Background()
+
+	maxRetry := 5
+	for i := 0; i < maxRetry; i++ {
+		// 限速等待（所有 worker 都要通過這個 gate）
+		if err := eth.ReceiptRateLimiter.Wait(ctx); err != nil {
+			return nil, fmt.Errorf("限流器錯誤: %w", err)
+		}
+
+		receipt, err := eth.Client.TransactionReceipt(ctx, txHash)
+		if err == nil {
+			return receipt, nil
+		}
+
+		if strings.Contains(err.Error(), "429") {
+			wait := time.Duration(2<<i) * time.Second
+			log.Printf("Infura 限速，重試 #%d：等待 %v", i+1, wait)
+			time.Sleep(wait)
+		} else {
+			log.Printf("查詢交易收據錯誤（非限流）: %v", err)
+			time.Sleep(1 * time.Second)
+		}
+	}
+
+	return nil, fmt.Errorf("多次重試後仍無法取得交易收據")
 }

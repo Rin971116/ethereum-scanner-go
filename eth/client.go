@@ -17,3 +17,10 @@ func InitEthClient() {
 		log.Fatal("Failed to connect to Ethereum RPC:", err)
 	}
 }
+
+func CloseEthClient() {
+	if Client != nil {
+		Client.Close()
+		log.Println("Ethereum client closed.")
+	}
+}

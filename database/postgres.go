@@ -21,11 +21,21 @@ func InitPostgres() {
 		log.Fatal("無法連接資料庫:", err)
 	}
 
-	// 自動遷移資料庫結構，更新一下當前資料庫中的表是否跟entity中定義的結構一致，如果不一致，則會更新資料庫中的表
+	// 自動更新資料表結構，讓資料庫中的表跟entity中定義的結構一致，如果沒有該表的話，還會自動建立該表
 	err = DB.AutoMigrate(&entity.Block{}, &entity.Transaction{})
 	if err != nil {
 		log.Fatal("自動遷移資料庫結構失敗:", err)
 	}
 
 	fmt.Println("成功連接 PostgreSQL")
+}
+
+func ClosePostgres() {
+	sqlDB, err := DB.DB()
+	if err != nil {
+		log.Printf("無法獲取資料庫實例: %v", err)
+		return
+	}
+	sqlDB.Close()
+	log.Println("資料庫連線已關閉")
 }

@@ -1,4 +1,4 @@
-package background
+package scanner
 
 import (
 	"context"
@@ -10,43 +10,17 @@ import (
 	"ethereum-scanner/database"
 	"ethereum-scanner/domain/entity"
 	"ethereum-scanner/eth"
-
-	"github.com/ethereum/go-ethereum/core/types"
+	"ethereum-scanner/workerpool"
 )
 
 func StartScanner(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done() // 確保在函數結束時減少計數器
 
-	// 創建一個 channel 來傳遞交易和區塊號碼
-	type txWithBlock struct {
-		tx          *types.Transaction
-		blockNumber uint64
-	}
-	txChan := make(chan txWithBlock, 2000)
-
-	// 啟動一個獨立的 goroutine 來處理交易
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for txData := range txChan { //會阻塞，直到有交易被放入channel
-			entityTx := entity.ConvertToEntityTransaction(txData.tx, txData.blockNumber)
-			if entityTx == nil {
-				continue
-			}
-			err := database.DB.Create(entityTx).Error
-			if err != nil {
-				log.Printf("寫入交易錯誤: %v", err)
-				continue
-			}
-			log.Printf("成功寫入交易 %s，blockNumber: %d", txData.tx.Hash().Hex(), txData.blockNumber)
-		}
-	}()
-
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("收到關閉信號，準備結束background scanner...")
-			close(txChan) // 關閉 存放transaction的channel
+			log.Println("scanner收到關閉信號，準備結束...")
+			workerpool.WorkerPool.Close() // 關閉 存放transaction的channel
 			return
 		default:
 			// 取得最新block number
@@ -87,7 +61,20 @@ func StartScanner(ctx context.Context, wg *sync.WaitGroup) {
 
 			// 將交易放入 存放transaction的channel，如果channel滿了，會阻塞，直到有空間可以放入
 			for _, tx := range block.Transactions() {
-				txChan <- txWithBlock{tx: tx, blockNumber: blockNumber}
+				currentTx := tx //!!每次都聲明一個新的變數(記憶體位置不同)，避免在多個goroutine中使用相同的變數(相同的記憶體位置)
+				workerpool.WorkerPool.AddJob(func() {
+					entityTx := entity.ConvertToEntityTransaction(currentTx, blockNumber)
+					if entityTx == nil {
+						log.Printf("交易 %s 轉換失敗，放棄處理", currentTx.Hash().Hex())
+						return
+					}
+					err = database.DB.Create(entityTx).Error
+					if err != nil {
+						log.Printf("交易寫入DB錯誤: %v", err)
+					} else {
+						log.Printf("成功寫入交易 %s 到資料庫", entityTx.Hash)
+					}
+				})
 			}
 
 			// 成功處理完一個區塊後，等待一下再處理下一個

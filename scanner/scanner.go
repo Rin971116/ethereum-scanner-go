@@ -10,6 +10,7 @@ import (
 	"ethereum-scanner/database"
 	"ethereum-scanner/domain/entity"
 	"ethereum-scanner/eth"
+	"ethereum-scanner/kafka"
 	"ethereum-scanner/workerpool"
 )
 
@@ -24,7 +25,7 @@ func StartScanner(ctx context.Context, wg *sync.WaitGroup) {
 			return
 		default:
 			// 取得最新block number
-			blockNumber, err := eth.Client.BlockNumber(context.Background())
+			blockNumber, err := eth.GetNextEthClient().BlockNumber(context.Background())
 			if err != nil {
 				log.Printf("取得區塊號碼錯誤: %v，等待 5 秒後重試", err)
 				time.Sleep(5 * time.Second)
@@ -43,7 +44,7 @@ func StartScanner(ctx context.Context, wg *sync.WaitGroup) {
 			}
 
 			// 取得最新block
-			block, err := eth.Client.BlockByNumber(context.Background(), big.NewInt(int64(blockNumber)))
+			block, err := eth.GetNextEthClient().BlockByNumber(context.Background(), big.NewInt(int64(blockNumber)))
 			if err != nil {
 				log.Printf("取得區塊錯誤: %v，等待 5 秒後重試", err)
 				time.Sleep(5 * time.Second)
@@ -66,8 +67,22 @@ func StartScanner(ctx context.Context, wg *sync.WaitGroup) {
 					entityTx := entity.ConvertToEntityTransaction(currentTx, blockNumber)
 					if entityTx == nil {
 						log.Printf("交易 %s 轉換失敗，放棄處理", currentTx.Hash().Hex())
+						database.DB.Create(&entity.FailedTransaction{
+							TxHash:      currentTx.Hash().Hex(),
+							BlockNumber: blockNumber,
+							Reason:      "轉換失敗",
+						})
 						return
 					}
+					// 將交易放入kafka
+					err = kafka.Produce(entityTx)
+					if err != nil {
+						log.Printf("交易寫入kafka錯誤: %v", err)
+					} else {
+						log.Printf("成功寫入交易 %s 到kafka", entityTx.Hash)
+					}
+
+					// 將交易寫入DB
 					err = database.DB.Create(entityTx).Error
 					if err != nil {
 						log.Printf("交易寫入DB錯誤: %v", err)

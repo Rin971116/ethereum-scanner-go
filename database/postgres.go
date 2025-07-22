@@ -22,7 +22,7 @@ func InitPostgres() {
 	}
 
 	// 自動更新資料表結構，讓資料庫中的表跟entity中定義的結構一致，如果沒有該表的話，還會自動建立該表
-	err = DB.AutoMigrate(&entity.Block{}, &entity.Transaction{})
+	err = DB.AutoMigrate(&entity.Block{}, &entity.Transaction{}, &entity.FailedTransaction{})
 	if err != nil {
 		log.Fatal("自動遷移資料庫結構失敗:", err)
 	}

@@ -33,6 +33,7 @@ func main() {
 
 	// 初始化 kafka writer
 	kafka.InitKafkaWriter([]string{"localhost:9092"}, "all_tx_topic")
+	// 離開前關閉 kafka writer
 	defer kafka.CloseKafkaWriter()
 
 	// 初始化資料庫連線

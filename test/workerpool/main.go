@@ -58,7 +58,7 @@ func main() {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			blockNumber, err := eth.Client.BlockNumber(context.Background())
+			blockNumber, err := eth.GetNextEthClient().BlockNumber(context.Background())
 			if err != nil {
 				fmt.Printf("failed %d: %v\n", i, err)
 			} else {

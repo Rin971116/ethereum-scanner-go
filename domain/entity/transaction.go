@@ -34,11 +34,11 @@ type Transaction struct {
 func ConvertToEntityTransaction(tx *types.Transaction, blockNumber uint64) *Transaction {
 
 	// 獲取交易收據以確認狀態(status)
-	receipt, err := GetEthReceipt(tx.Hash())
-	if err != nil {
-		log.Printf("獲取交易收據錯誤: %v", err)
-		return nil
-	}
+	// receipt, err := GetEthReceipt(tx.Hash())
+	// if err != nil {
+	// 	log.Printf("獲取交易收據錯誤: %v", err)
+	// 	return nil
+	// }
 
 	// 獲取發送方地址(from)
 	signer := types.LatestSignerForChainID(big.NewInt(1))
@@ -62,10 +62,8 @@ func ConvertToEntityTransaction(tx *types.Transaction, blockNumber uint64) *Tran
 		Value:       tx.Value().String(),
 		GasPrice:    tx.GasPrice().String(),
 		GasLimit:    tx.Gas(),
-		GasUsed:     receipt.GasUsed,
 		Nonce:       tx.Nonce(),
 		Data:        tx.Data(),
-		Status:      receipt.Status == 1,
 	}
 }
 
@@ -80,7 +78,7 @@ func GetEthReceipt(txHash common.Hash) (*types.Receipt, error) {
 			return nil, fmt.Errorf("限流器錯誤: %w", err)
 		}
 
-		receipt, err := eth.Client.TransactionReceipt(ctx, txHash)
+		receipt, err := eth.GetNextEthClient().TransactionReceipt(ctx, txHash)
 		if err == nil {
 			return receipt, nil
 		}

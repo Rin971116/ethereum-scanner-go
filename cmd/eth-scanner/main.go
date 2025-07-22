@@ -5,6 +5,7 @@ import (
 	"ethereum-scanner/controllers"
 	"ethereum-scanner/database"
 	"ethereum-scanner/eth"
+	"ethereum-scanner/kafka"
 	"ethereum-scanner/scanner"
 	"ethereum-scanner/workerpool"
 	"log"
@@ -30,13 +31,17 @@ func main() {
 	// 初始化全域限流器，沒有用到資源，所以不用關閉
 	eth.InitReceiptRateLimiter()
 
+	// 初始化 kafka writer
+	kafka.InitKafkaWriter([]string{"localhost:9092"}, "all_tx_topic")
+	defer kafka.CloseKafkaWriter()
+
 	// 初始化資料庫連線
 	database.InitPostgres()
 	// 離開前關閉資料庫連線
 	defer database.ClosePostgres()
 
 	// 初始化 worker pool
-	workerpool.InitWorkerPool(5, &wg)
+	workerpool.InitWorkerPool(20, &wg)
 
 	// 起一個goroutine 跑背景掃鏈
 	wg.Add(1)
